@@ -1,0 +1,2 @@
+api_keys:
+  google_gemini_env_name: "GOOGLE_API_KEY"
