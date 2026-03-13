@@ -1,4 +1,8 @@
 .env
+
+data/raw/
+*.pdf
+*.db
+.byaldi/
+
 __pycache__/
-data/
-notebooks/.byaldi/
