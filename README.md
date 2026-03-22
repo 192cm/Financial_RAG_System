@@ -36,19 +36,30 @@
 ## 📂 디렉토리 구조 (Directory Structure)
 
 ```text
-📦 Fin-Vision-Agent
- ┣ 📂 config
- ┃ ┗ 📜 config.yaml             # API 키 환경 변수명 설정
- ┣ 📂 data
- ┃ ┣ 📂 raw                     # 원본 DART 사업보고서 PDF 파일 위치
- ┃ ┣ 📂 chroma_db               # ChromaDB 벡터 저장소 (자동 생성)
- ┃ ┗ 📜 docstore.pkl            # ParentDocument 원본 텍스트 저장소 (자동 생성)
- ┣ 📂 src
- ┃ ┣ 📜 __init__.py             # 모듈 내보내기
- ┃ ┣ 📜 document_processor.py   # 메타데이터 주입 및 하이브리드 리트리벌 구축
- ┃ ┣ 📜 query_router.py         # 기업명 동적 인식 및 지능형 라우팅 로직
- ┃ ┣ 📜 vision_utils.py         # PyMuPDF(fitz) 고해상도 이미지 변환 도구
- ┃ ┗ 📜 agent_workflow.py       # 자가 교정 및 슬라이딩 윈도우 프롬프트/로직
- ┣ 📜 01_baseline_rag.ipynb     # Method 0: 단순 텍스트 기반 RAG (대조군)
- ┣ 📜 02_method1_vision_rag.ipynb # Method 1: 단일 페이지 Vision RAG (대조군)
- ┗ 📜 03_method2_dual_path.ipynb  # Method 2: SOTA 하이브리드 에이전트 (제안 모델)
+dual_path_vision_rag/
+│
+├── data/                           # 🗂️ 데이터 저장소
+│   ├── raw/                        # 10개 기업 사업보고서 PDF
+│   ├── chroma_db/                  # Vector DB
+│   └── docstore.pkl                # ParentDocument 원본 텍스트 저장소
+│
+├── config/                         # ⚙️ 환경 설정 폴더
+│   └── config.yaml                 # 설정값 (API Key, Chunk Size 등)
+│
+├── src/                            # 🛠️ [NEW!] 핵심 로직 모듈 (.py)
+│   ├── __init__.py                 
+│   ├── document_processor.py       # PDF 로드, 텍스트 Chunking (Parent Doc 세팅) 로직
+│   ├── query_router.py             # 기업명 동적 인식 및 지능형 라우팅 로직
+│   ├── vision_utils.py             # PDF를 고화질 이미지(Base64)로 변환하는 함수
+│   └── agent_workflow.py           # N, N+1, N+2 동적 윈도우 & 교정적 에이전트 루프 클래스
+│
+├── notebooks/                      # 📓 실험 및 시각화 노트북 (.ipynb)
+│   ├── 01_baseline_text_rag.ipynb      # src/ 모듈을 import 하여 대조군 실험
+│   ├── 02_method1_vision_only.ipynb    # src/ 모듈을 import 하여 실험군 1 실험
+│   ├── 03_method2_dual_path.ipynb      # src/ 모듈을 import 하여 최종 제안 모델 실행
+│   └── 04_ablation_study_results.ipynb # 세 모델 결과 비교 막대그래프 시각화
+│
+├── .env                            # 보안 키
+├── requirements.txt                # 패키지 의존성
+├── PROPOSAL.md                     # 프로젝트 제안서
+└── README.md                       # 프로젝트 설명서
