@@ -61,5 +61,4 @@ dual_path_vision_rag/
 │
 ├── .env                            # 보안 키
 ├── requirements.txt                # 패키지 의존성
-├── PROPOSAL.md                     # 프로젝트 제안서
 └── README.md                       # 프로젝트 설명서
