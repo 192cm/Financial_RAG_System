@@ -1,0 +1,86 @@
+# Financial RAG System - Project Structure & File Descriptions
+
+본 프로젝트는 금융 문서(사업보고서)를 기반으로 한 하이브리드 RAG 시스템의 성능을 평가하고 최적의 방법론을 도출하기 위해 설계되었습니다.
+
+## 1. Core Source Code (src/)
+
+### src/config.py
+- **역할**: 프로젝트 전체의 설정을 중앙 관리합니다.
+- **상세**: BASE_DIR, 데이터 경로(raw, db), 인덱스 이름 등을 정의하며 `.env` 파일 로드 및 API Key 설정을 담당합니다.
+
+### src/models.py
+- **역할**: LLM 모델(Gemini) 인스턴스를 생성하는 팩토리 모듈입니다.
+- **성능 강화**: 503 에러 및 Rate Limit 대응을 위해 `max_retries(10회)`와 `timeout(120초)`이 적용되어 있습니다.
+
+### src/__init__.py
+- **역할**: 패키지 레벨의 인터페이스를 정의합니다. 주요 클래스와 함수들을 외부에서 쉽게 불러올 수 있도록 노출합니다.
+
+---
+
+## 2. Retrieval Modules (src/retrieval/)
+
+### src/retrieval/vision_engine.py
+- **역할**: ColPali 모델을 기반으로 한 비전 검색기(Vision-only Retrieval)를 담당합니다.
+- **기능**: 인덱스 로드(`load_index`), 신규 인덱스 구축(`index`), 이미지 검색(`search`)을 수행합니다.
+
+### src/retrieval/text_engine.py
+- **역할**: 텍스트 기반의 하이브리드 검색기(BM25 + Semantic)를 담당합니다.
+- **기능**: ParentDocumentRetriever를 활용하여 미세한 텍스트 덩어리를 검색합니다.
+
+### src/retrieval/router.py
+- **역할**: 질문에서 대상 회사명을 추출하고, 해당 회사 전용 리트리버로 필터링하는 라우팅 로직을 포함합니다.
+
+---
+
+## 3. RAG Engines (src/engines/)
+
+### src/engines/rag_engines.py
+- **역할**: Method 0(Baseline)부터 Method 3(SOTA)까지의 모든 검색 방법론을 구현한 통합 엔진입니다.
+- **Method**: 텍스트 단독, 이미지 단독, 그리고 하이브리드 방식(Dual-path)을 모두 지원합니다.
+
+### src/engines/agent.py
+- **역할**: 'CorrectiveAgent'를 통해 검색 결과의 정확성을 검증하고, 필요 시 후보군을 확장하거나 재검색하는 에이전트 로직입니다.
+
+---
+
+## 4. Evaluation System (src/evaluation/)
+
+### src/evaluation/runner.py
+- **역할**: 전체 평가 데이터셋을 순회하며 Method 0-3의 성능을 측정하는 메인 러너입니다.
+- **방어 로직**: API 호출 실패(503 등) 시 지수 백오프(Exponential Backoff)를 적용하여 최대 3회 재시도하며, 장애 발생 시 인덱싱 로그를 남깁니다.
+
+### src/evaluation/judge.py
+- **역할**: LLM-as-a-Judge 기법을 사용하여 생성된 답변과 정답(GT)을 비교하여 점수를 매깁니다.
+- **방어 로직**: 심판 호출 과정에서도 재시도 로직이 적용되어 안정적인 평가를 보장합니다.
+
+### src/evaluation/metrics.py
+- **역할**: Exact Match(EM), ROUGE-L, BLEU 등의 전통적인 자연어 처리 메트릭을 계산합니다.
+
+---
+
+## 5. Utilities (src/utils/)
+
+### src/utils/vision.py
+- **역할**: 이미지 처리 및 PDF 페이지 추출 관련 헬퍼 함수 모음입니다.
+
+### src/utils/common.py
+- **역할**: 범용적인 텍스트 전처리 및 응답 정제 유틸리티입니다.
+- **기능**: `clean_llm_response()`를 통해 멀티모달 API의 복잡한 반환값에서 순수 답변 텍스트만 추출합니다.
+
+---
+
+## 6. Notebooks & Data
+
+### notebooks/
+- `01_baseline_rag.ipynb`: 기본 텍스트 RAG 테스트 환경
+- `02_method1_vision_rag.ipynb`: 고성능 비전 검색(ColPali) 테스트 환경
+- `04_evaluation_results.ipynb`: 모든 방법론의 벤치마크 점수 및 결과 분석
+
+### data/
+- `raw/`: 평가 데이터셋인 원본 PDF 파일 보관함
+- `chroma_db/`: 텍스트 임베딩 저장을 위한 벡터 DB
+- `.byaldi/`: ColPali 비전 데이터 인덱스 저장소
+
+---
+최종 수정일: 2026-04-08
+설명: API 대응 안정성 로직(Retry, Backoff) 강화 완료.

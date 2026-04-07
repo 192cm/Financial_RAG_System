@@ -1,8 +1,57 @@
+# --- Environments ---
 .env
+.venv/
+env/
+venv/
+ENV/
 
-data/
-*.pdf
-*.db
-.byaldi/
-
+# --- Python ---
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Jupyter Notebook ---
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# --- Data & DB ---
+data/chroma_db/
+data/docstore.pkl
+data/comprehensive_evaluation_results.csv
+.byaldi/
+*.db
+*.sqlite3
+
+# --- PDF (Data) ---
+data/raw/*.pdf
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Temporary ---
+tmp/
+CORTEX_REPORTS/
