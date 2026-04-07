@@ -48,9 +48,7 @@ def extract_target_company(query, company_list=None, data_dir="../data/raw"):
 
     companies_str = ", ".join(company_list)
 
-    llm_router = ChatGoogleGenerativeAI(
-        model="gemini-3.1-flash-lite-preview", temperature=0
-    )
+    llm_router = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview", temperature=0)
 
     router_prompt = ChatPromptTemplate.from_template(
         "당신은 금융 검색어 분석기입니다. 사용자의 [질문]에서 타겟으로 하는 '기업명'을 추출하세요.\n"
