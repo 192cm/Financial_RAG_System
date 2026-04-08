@@ -25,12 +25,16 @@ class EvaluationRunner:
             }
             
             for model_name, method_func in methods.items():
+                print(f"   🚀 [{model_name}] 시작...")
                 pred_text = "ERROR: API Failure after retries"
+                latency = 0.0
                 max_attempts = 3
                 
                 for attempt in range(max_attempts):
                     try:
+                        start_time = time.time()
                         pred_text = method_func(q)
+                        latency = round(time.time() - start_time, 2)
                         break
                     except Exception as e:
                         wait = (attempt + 1) * 30  # 지수적 대기 시간 (30초, 60초, 90초)
@@ -44,10 +48,11 @@ class EvaluationRunner:
                     "Type": data["type"],
                     "Model": model_name,
                     "Answer": pred_text,
-                    "Exact_Match": calc_exact_match(pred_text, gt_num),
+                    "Exact_Match": calc_exact_match(pred_text, gt_num, data.get("unit")),
                     "ROUGE-L": round(rouge, 3),
                     "BLEU": round(bleu, 3),
-                    "LLM_Judge": llm_as_a_judge(q, pred_text, gt_text)
+                    "LLM_Judge": llm_as_a_judge(q, pred_text, gt_text),
+                    "Latency (sec)": latency
                 })
                 time.sleep(2) # Rate Limit protection
             time.sleep(15) # Heavy sleep between queries for safety
