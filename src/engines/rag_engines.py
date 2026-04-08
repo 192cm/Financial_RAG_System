@@ -21,13 +21,13 @@ class RAGEngine:
         self.llm = get_gemini_model()
 
     def run_method0_baseline(self, query: str) -> str:
-        """Method 0: 단순 텍스트 기반 Baseline RAG"""
+        """Method 0: 단순 텍스트 기반 하이브리드 Baseline RAG를 실행합니다."""
         prompt = ChatPromptTemplate.from_template("다음 문서를 바탕으로 질문에 답하세요.\n\n문서:{context}\n질문:{input}")
         chain = create_retrieval_chain(self.base_retriever, create_stuff_documents_chain(self.llm, prompt))
         return chain.invoke({"input": query})["answer"]
 
     def run_method1_vision(self, query: str) -> str:
-        """Method 1: Simple Vision RAG (ColPali k=1)"""
+        """Method 1: ColPali 모델을 이용해 비전 정보로만 답변을 생성합니다."""
         if not self.vision_retriever: return "Error: Vision retriever not initialized"
         results = self.vision_retriever.search(query, k=1)
         b64 = results[0].base64
@@ -39,7 +39,7 @@ class RAGEngine:
         return clean_llm_response(res)
 
     def run_method2_dual_basic(self, query: str) -> str:
-        """Method 2: Dual-Path Basic Hybrid (No Agent Loop)"""
+        """Method 2: 텍스트 검색과 비전 검색 결과를 단순 결합하여 답변을 생성합니다."""
         docs = self.base_retriever.invoke(query)
         context = "\n".join([d.page_content for d in docs[:3]])
         _, img = get_page_text_and_image(docs[0].metadata['source'], docs[0].metadata['page'], self.all_docs)
@@ -50,7 +50,7 @@ class RAGEngine:
         return clean_llm_response(res)
 
     def run_method3_sota(self, query: str, use_prefilter: bool = True, max_expansions: int = 3) -> str:
-        """Method 3: Full Agentic Dual-Path System"""
+        """Method 3 (SOTA): 라우팅, 검색, 그리고 에이전트 자가 교정 피드백 루프를 적용하여 답변을 도출합니다."""
         active_retriever = self.base_retriever
         if use_prefilter:
             company = extract_target_company(query)

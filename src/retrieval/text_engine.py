@@ -31,6 +31,7 @@ class TextRetrievalEngine:
         return self._build_new_retriever(pdf_paths, db_dir, store_path, k)
 
     def _load_existing_retriever(self, db_dir: str, store_path: str, k: int) -> Tuple[EnsembleRetriever, List]:
+        """저장된 하이브리드 인덱스(VectorDB, Docstore)를 불러옵니다."""
         print("⚡ 하드디스크에 저장된 DB와 문서를 불러옵니다!")
         vectorstore = Chroma(persist_directory=db_dir, embedding_function=self.embedding_model)
         
@@ -49,6 +50,7 @@ class TextRetrievalEngine:
         return hybrid_retriever, all_documents
 
     def _build_new_retriever(self, pdf_paths: List[str], db_dir: str, store_path: str, k: int) -> Tuple[EnsembleRetriever, List]:
+        """원본 PDF로부터 텍스트를 추출해 부분 단위로 나누고 하이브리드 검색기를 구축합니다."""
         print(f"⏳ {len(pdf_paths)}개의 문서를 기반으로 하이브리드 DB를 구축합니다...")
         all_documents = []
         for path in pdf_paths:

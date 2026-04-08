@@ -13,6 +13,7 @@ class CorrectiveAgent:
         self.llm = get_gemini_model(model_name=model_name)
 
     def run(self, query: str, pdf_path: str, initial_pages: List[int], all_documents: List, max_expansions: int = 3, table_name: str = "NONE") -> str:
+        """초기 검색된 문서 페이지들을 바탕으로 정답을 찾고 필요 시 주변 페이지로 검색 범위를 확장합니다."""
         # 초기 페이지 그룹으로 시작 → NEXT_PAGE_NEEDED 시 마지막 페이지 기준으로 누적 확장
         current_pages = list(initial_pages)
         pdf_filename = os.path.basename(pdf_path)
@@ -50,6 +51,7 @@ class CorrectiveAgent:
         return "NOT_FOUND_IN_THIS_CANDIDATE"
 
     def _collect_data(self, pdf_path: str, pages: List[int], all_docs: List):
+        """에이전트가 분석할 대상 페이지들의 텍스트와 이미지 데이터를 수집합니다."""
         texts, images = [], []
         for p in pages:
             t, img = get_page_text_and_image(pdf_path, p, all_docs)
@@ -58,6 +60,7 @@ class CorrectiveAgent:
         return "\n\n".join(texts), images
 
     def _get_prompt(self, filename: str, query: str, context: str, table_name: str = "NONE") -> str:
+        """에이전트 판단을 위해 기업명, 표 제약조건, 정합성을 검증하는 프롬프트를 생성합니다."""
         # 표 이름이 명시된 경우 프롬프트에 강제 검증 규칙 삽입
         table_rule = (
             f'\n0. [표 검증 - 최우선] 현재 페이지에 "{table_name}" 표(또는 섹션)가 명확히 존재하지 않으면 '
@@ -97,6 +100,7 @@ class CorrectiveAgent:
 """
 
     def _parse_response(self, response_text: Any):
+        """에이전트의 LLM 응답값에서 검증결과(status)와 답변(answer)을 파싱합니다."""
         try:
             res = response_text
             if isinstance(res, list):

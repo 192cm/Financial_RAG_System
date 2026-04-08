@@ -5,11 +5,13 @@ from src.evaluation.metrics import calc_exact_match, calc_rouge_bleu, PPLCalcula
 from src.evaluation.judge import llm_as_a_judge
 
 class EvaluationRunner:
+    """각 평가 데이터셋을 순회하며 Method 0-3의 성능을 측정하는 메인 평가 클래스"""
     def __init__(self, engine):
         self.engine = engine
         self.ppl_calc = PPLCalculator()
 
     def run_full_evaluation(self, dataset: List[Dict]) -> pd.DataFrame:
+        """데이터셋 전체에 대해 각 RAG 방법론별 예측을 수행하고 메트릭을 취합하여 DataFrame으로 반환합니다."""
         results = []
         for idx, data in enumerate(dataset):
             q, gt_num, gt_text = data["query"], data["gt_number"], data["gt_text"]

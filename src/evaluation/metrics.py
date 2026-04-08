@@ -89,6 +89,7 @@ def calc_exact_match(pred: str, gt_num: str, unit: str | None = None) -> int:
     return 0
 
 def calc_rouge_bleu(pred: str, gt_text: str):
+    """결과 텍스트와 정답 텍스트 간의 형태적 유사도(ROUGE-L, BLEU)를 측정합니다."""
     scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
     rouge = scorer.score(gt_text, pred)['rougeL'].fmeasure
     reference = [nltk.word_tokenize(gt_text)]
@@ -97,6 +98,7 @@ def calc_rouge_bleu(pred: str, gt_text: str):
     return rouge, bleu
 
 class PPLCalculator:
+    """문장 생성 품질을 측정하기 위해 Perplexity(PPL)를 계산하는 클래스"""
     def __init__(self, model_id: str = "skt/kogpt2-base-v2"):
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -105,6 +107,7 @@ class PPLCalculator:
             self.tokenizer = self.model = None
 
     def calculate(self, text: str) -> float:
+        """입력 문장의 Perplexity 값을 산출합니다."""
         if not self.model or not text.strip() or "실패" in text: return np.nan
         encodings = self.tokenizer(text, return_tensors="pt")
         seq_len = encodings.input_ids.size(1)

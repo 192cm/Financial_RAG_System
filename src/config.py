@@ -25,6 +25,7 @@ class Settings:
             os.environ["GOOGLE_API_KEY"] = self.GOOGLE_API_KEY
 
     def get_api_key(self) -> str:
+        """설정된 Google Gemini API Key를 반환합니다."""
         return self.GOOGLE_API_KEY
 
 settings = Settings()
