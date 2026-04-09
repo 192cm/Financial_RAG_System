@@ -12,7 +12,7 @@ class CorrectiveAgent:
     def __init__(self, model_name: str = "gemini-3.1-flash-lite-preview"):
         self.llm = get_gemini_model(model_name=model_name)
 
-    def run(self, query: str, pdf_path: str, initial_pages: List[int], all_documents: List, max_expansions: int = 3, table_name: str = "NONE") -> str:
+    def run(self, query: str, pdf_path: str, initial_pages: List[int], all_documents: List, max_expansions: int = 3, table_name: str = "NONE", return_metadata: bool = False) -> Any:
         """초기 검색된 문서 페이지들을 바탕으로 정답을 찾고 필요 시 주변 페이지로 검색 범위를 확장합니다."""
         # 초기 페이지 그룹으로 시작 → NEXT/PREV 시 해당 방향으로 누적 확장
         current_pages = list(initial_pages)
@@ -20,10 +20,13 @@ class CorrectiveAgent:
         
         # Context Carry-over (루프 중간에 발견된 중요 메타데이터 기억)
         metadata_context = ""
+        
+        # 토큰 사용량 통계 초기화
+        total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
         for step in range(max_expansions + 1):
             current_pages = sorted(list(set(current_pages))) # 중복 제거 및 정렬
-            print(f"🔄 [Agent Loop {step+1}] 분석 중인 페이지: {[p+1 for p in current_pages]}")
+            print(f"[Agent Loop {step+1}] 분석 중인 페이지: {[p+1 for p in current_pages]}")
             
             text_context, images = self._collect_data(pdf_path, current_pages, all_documents)
             
@@ -33,6 +36,13 @@ class CorrectiveAgent:
                 content_list.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
             
             response = self.llm.invoke([HumanMessage(content=content_list)])
+            
+            # 토큰 사용량 누적
+            usage = getattr(response, "usage_metadata", {})
+            for k in total_usage:
+                if k in usage:
+                    total_usage[k] += usage[k]
+
             status, answer, meta = self._parse_response(response.content)
             
             # 메타데이터 업데이트 (단위 정보 등 보존)
@@ -40,13 +50,15 @@ class CorrectiveAgent:
                 metadata_context = meta
 
             if status == "WRONG_DOCUMENT":
-                return "WRONG_DOCUMENT"
+                final_status = "WRONG_DOCUMENT"
+                break
             elif status == "NEXT_PAGE_NEEDED":
                 if step < max_expansions:
                     current_pages.append(current_pages[-1] + 1)
                     continue
                 else:
-                    return "NOT_FOUND_IN_THIS_CANDIDATE"
+                    final_status = "NOT_FOUND_IN_THIS_CANDIDATE"
+                    break
             elif status == "PREV_PAGE_NEEDED":
                 if step < max_expansions:
                     if current_pages[0] > 0:
@@ -56,15 +68,22 @@ class CorrectiveAgent:
                         # 더 이상 이전 페이지가 없음 → 현재 컨텍스트에서 최선 다하기
                         pass
                 else:
-                    return "NOT_FOUND_IN_THIS_CANDIDATE"
+                    final_status = "NOT_FOUND_IN_THIS_CANDIDATE"
+                    break
             elif status == "SUCCESS":
-                return answer
-            elif status == "NOT_FOUND_IN_THIS_CANDIDATE":
-                return "NOT_FOUND_IN_THIS_CANDIDATE"
+                final_status = "SUCCESS"
+                break
             else:
-                return "NOT_FOUND_IN_THIS_CANDIDATE"
+                final_status = "NOT_FOUND_IN_THIS_CANDIDATE"
+                break
+        else:
+            final_status = "NOT_FOUND_IN_THIS_CANDIDATE"
 
-        return "NOT_FOUND_IN_THIS_CANDIDATE"
+        # 결과 조립
+        res_answer = answer if final_status == "SUCCESS" else final_status
+        
+        metadata = {"usage": total_usage}
+        return {"answer": res_answer, "metadata": metadata} if return_metadata else res_answer
 
     def _collect_data(self, pdf_path: str, pages: List[int], all_docs: List):
         """에이전트가 분석할 대상 페이지들의 텍스트와 이미지 데이터를 수집합니다."""
@@ -102,9 +121,16 @@ class CorrectiveAgent:
 
 3. [표 불일치] 질문이 지목한 특정 표가 아닌 다른 표라면 → "NOT_FOUND_IN_THIS_CANDIDATE"
 
-4. [정답 확정] 질문이 요구하는 수치를 원문에서 직접 찾고 '단위'까지 확신할 수 있는 경우 → "SUCCESS"
+4. [정답 확정] 질문이 요구하는 '정확한 수치'를 원문에서 직접 찾고 '단위'까지 확신할 수 있는 경우에만 → "SUCCESS"
+   - [주의] 관련 항목(예: 연구개발비, 매출액)은 있으나 질문이 요구하는 '비율'이나 '계산된 값'이 원문에 명시되어 있지 않은 경우 → 절대로 SUCCESS를 사용하지 말고 "NOT_FOUND_IN_THIS_CANDIDATE"를 반환하세요.
+   - [연도-기수 매칭 가이드] 
+     * 질문의 연도와 표 헤더의 연도가 정확히 일치하는지 확인하십시오.
+     * 주의: 2025년 보고서(제 57기)에서 2024년 값을 찾을 경우, '당기'가 아닌 '전기' 헤더(제 56기) 아래의 값을 추출해야 합니다. 
+     * 단순히 '현재 기수'의 값을 2024년 값으로 답변하는 실수를 절대 하지 마십시오.
    - 반드시 원문에 명시된 숫자만 사용 (계산·추론 금지)
    - 반드시 단위(백만원, 천원 등)를 원문 그대로 표기 (이전 루프 정보 참고 가능)
+   - 답변 끝에 반드시 "[최종 정답]: 수치+단위" 형식으로 정답만 별도로 표기하세요.
+     * 예: "2025년 당기순이익은 1,234백만원입니다. [최종 정답]: 1,234백만원"
    - 답변은 질문에 대한 완결된 문장으로 작성하고 출처를 명시하세요.
 
 반드시 아래 JSON 형식으로만 응답하세요:
@@ -131,6 +157,9 @@ class CorrectiveAgent:
                 clean_json = json_match.group()
 
             parsed = json.loads(clean_json)
+            if not isinstance(parsed, dict):
+                return "UNKNOWN", "", ""
+
             return (
                 parsed.get("status", "UNKNOWN"), 
                 parsed.get("answer", ""), 

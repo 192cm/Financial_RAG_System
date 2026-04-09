@@ -11,6 +11,11 @@ _UNIT_MULTIPLIER = {
     "천원":   1_000,
     "백만원": 1_000_000,
     "십억원": 1_000_000_000,
+    "억원":   100_000_000,
+    "조원":   1_000_000_000_000,
+    "억":     100_000_000,
+    "조":     1_000_000_000_000,
+    "만":     10_000,
 }
 
 def _normalize_financial_number(s: str) -> str:
@@ -25,37 +30,37 @@ def _normalize_financial_number(s: str) -> str:
     return s
 
 def _to_base_value(value_str: str, unit: str | None) -> float | None:
-    """숫자 문자열과 단위를 받아 '원' 기준의 float로 변환합니다.
-    변환 불가 시 None 반환.
-    """
+    """숫자 문자열과 단위를 받아 '원' 기준의 float로 변환합니다."""
     import re
-    # 콤마·공백·괄호 음수 처리
     clean = _normalize_financial_number(value_str)
-    # 숫자 부분만 추출 (소수점, 부호 포함)
-    m = re.search(r'-?[\d.]+', clean)
-    if not m:
-        return None
-    try:
-        num = float(m.group())
-    except ValueError:
-        return None
+    # '140만' 같이 단위가 섞인 경우 처리
+    m_man = re.search(r'(\d+)만', clean)
+    if m_man:
+        val = float(m_man.group(1)) * 10_000
+    else:
+        m = re.search(r'-?[\d.]+', clean)
+        if not m: return None
+        val = float(m.group())
+    
     multiplier = _UNIT_MULTIPLIER.get(unit, 1) if unit else 1
-    return num * multiplier
+    return val * multiplier
 
 def _extract_unit_and_value(text: str) -> tuple[float | None, str | None]:
-    """모델 답변 텍스트에서 숫자와 단위를 추출합니다.
-    예) '2,258,424천원입니다' → (2258424.0, '천원')
-    """
+    """모델 답변 텍스트에서 숫자와 단위를 추출합니다."""
     import re
-    # 가능한 단위 중 가장 긴 것부터 매칭
+    # [최종 정답]: 수치 패턴을 최우선으로 찾음
+    m_final = re.search(r'\[최종 정답\]:\s*(-?[\d,.]+\s*[가-힣]+)', text)
+    target_text = m_final.group(1) if m_final else text
+
     units = sorted(_UNIT_MULTIPLIER.keys(), key=len, reverse=True)
     pattern = r'(-?[\d,]+(?:\.\d+)?)\s*(' + '|'.join(units) + r')'
-    m = re.search(pattern, text)
+    m = re.search(pattern, target_text)
     if m:
         num_str = m.group(1).replace(',', '')
         unit = m.group(2)
         try:
-            return float(num_str) * _UNIT_MULTIPLIER[unit], unit
+            val = float(num_str)
+            return val * _UNIT_MULTIPLIER[unit], unit
         except ValueError:
             return None, None
     return None, None

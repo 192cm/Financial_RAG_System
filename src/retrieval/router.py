@@ -54,11 +54,12 @@ def rerank_by_table(docs: list, table_name: str) -> list:
 
 def get_company_filtered_retriever(base_retriever, all_docs, company_name: str, k: int = 10):
     """특정 기업에 대해 필터링된 하이브리드 검색기를 생성합니다."""
-    from langchain_classic.retrievers import EnsembleRetriever, BM25Retriever
+    from langchain_classic.retrievers import EnsembleRetriever, BM25Retriever, ParentDocumentRetriever
     
     if company_name == "ALL":
         return base_retriever
         
+    print(f"   🔍 '{company_name}' 전용 하이브리드 검색기 생성 중...")
     company_docs = [doc for doc in all_docs if company_name in doc.metadata.get('source', '')]
     
     if not company_docs:
@@ -68,6 +69,11 @@ def get_company_filtered_retriever(base_retriever, all_docs, company_name: str, 
     bm25.k = k
     
     parent = base_retriever.retrievers[1]
-    parent.search_kwargs["filter"] = {"source": {"$contains": company_name}}
+    new_parent = ParentDocumentRetriever(
+        vectorstore=parent.vectorstore,
+        docstore=parent.docstore,
+        child_splitter=parent.child_splitter,
+        search_kwargs={**parent.search_kwargs, "filter": {"source": {"$contains": company_name}}}
+    )
     
-    return EnsembleRetriever(retrievers=[bm25, parent], weights=[0.5, 0.5])
+    return EnsembleRetriever(retrievers=[bm25, new_parent], weights=[0.5, 0.5])

@@ -8,10 +8,11 @@
 ## ✨ 핵심 기술 및 특징 (Core Technologies)
 
 1. **ColPali v1.2 기반 비전 검색**: 텍스트 추출의 한계를 넘어 이미지(표, 차트) 자체를 벡터화하여 검색하는 최신 시각적 리트리벌(Vision Retrieval) 방식 도입.
-2. **로컬 Neural Reranking (BGE-M3)**: 검색된 후보군에 대해 BGE-Reranker-v2-m3 모델을 활용하여 문맥적 유사도를 재순위화함으로써 검색 정밀도 극대화.
-3. **양방향 자가 교정(Bidirectional Corrective) 에이전트**: Gemini 모델이 검색된 이미지를 직접 읽고 질문과의 정합성을 스스로 검증하며, 표 단절이나 단위(Unit) 누락 감지 시 전후 페이지를 동적으로 탐색하는 **양방향 슬라이딩 윈도우(Bidirectional Sliding Window)** 루프 구현.
-4. **하이브리드 앙상블 검색 & 재순위화**: BM25, Vector Semantics, ColPali 비전 검색을 병행하고, 질문 내 '표 이름' 기반 가중치와 Neural Score를 결합한 **Hybrid Reranking** 전략 사용.
-5. **Context Carry-over 지능**: 여러 페이지에 걸친 분석 중 발견된 핵심 메타데이터(단위, 기업명 등)를 휘발시키지 않고 다음 탐색 단계로 전달하여 일관된 답변 생성 보장.
+2. **Dual-Path Hybrid Retrieval**: 텍스트 앙상블(BM25+Semantic)과 비전 리트리벌을 병렬로 수행하여 검색 후보군을 통합함으로써 검색 누락률 최소화.
+3. **상호 검증 가중치(Consensus Boost)**: 두 검색 경로가 동시에 지목한 페이지에 대해 AI가 높은 신뢰 점수를 부여하여 정답 페이지를 최상단으로 강제 정렬.
+4. **로컬 Neural Reranking (BGE-M3)**: 통합된 모든 후보군에 대해 의미론적 유사도를 재순위화함으로써 검색 정밀도 극대화.
+5. **양방향 자가 교정(Bidirectional Corrective) 에이전트**: Gemini 모델이 검색된 고화질 이미지를 직접 읽고(2차 비전 검증), 표 단절이나 단위 누락 감지 시 전후 페이지를 동적으로 탐색하는 **Sliding Window** 메커니즘.
+6. **메모리 기반 검색기 캐싱(Retriever Caching)**: 동일 기업 반복 쿼리 시 검색기 필터링 비용을 0ms로 단축하는 최적화 적용.
 
 ---
 
@@ -68,10 +69,8 @@ Financial_RAG_System/
 
 ## 🚀 워크플로우 (Methodologies)
 
-- **Method 0 (Baseline)**: 기존의 텍스트 기반 하이브리드(BM25 + Semantic) 검색 및 생성.
-- **Method 1 (Vision-only)**: ColPali를 이용해 PDF 페이지 자체를 검색하여 멀티모달 LLM으로 답변 생성.
-- **Method 2 (Dual-Path)**: 텍스트 검색 결과와 비전 검색 결과를 결합하여 최적의 컨텍스트 제공.
-- **Method 3 (SOTA - Agentic Multimodal)**: 지능형 라우팅, **Hybrid Reranking(표 매칭 + Neural)**, 그리고 비전 기반 자가 교정 메커니즘을 결합. 에이전트가 시각적 단절을 감지하면 **전후 페이지로 검색 범위를 동적으로 확장(Bidirectional Sliding Window)**하고, 추출된 문맥(Context Carry-over)을 유지하며 최종 답변 도출.
+- **Method 2 (Dual-Path Basic)**: 텍스트 검색 결과와 시각 정보를 단순 결합하여 제공하는 하이 레벨 하이브리드 RAG. ([03_method2_dual_path.ipynb](file:///c:/Users/kyle0/Develops/Financial_RAG_System/notebooks/03_method2_dual_path.ipynb))
+- **Method 3 (SOTA - Agentic Multimodal)**: 지능형 라우팅과 **Dual-Path 검색**, **Consensus Boost(상호 검증 가중치)**, **Neural + Heuristic 리랭킹**이 결합된 최신 아키텍처. 에이전트가 단절 감지 시 전후 페이지를 동적으로 탐색하며 최종 답변을 도출합니다. ([05_method3_sota_rag.ipynb](file:///c:/Users/kyle0/Develops/Financial_RAG_System/notebooks/05_method3_sota_rag.ipynb))
 
 ---
 *(본 프로젝트는 금융 데이터 분석의 정교함을 높이기 위한 멀티모달 기술의 실전 적용 사례를 제시합니다.)*

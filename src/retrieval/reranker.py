@@ -12,10 +12,10 @@ class NeuralReranker:
         else:
             self.device = device
             
-        print(f"🚀 Neural Reranker 로딩 중... (Device: {self.device})")
+        print(f"Neural Reranker 로딩 중... (Device: {self.device})")
         # Sigmoid 활성화 함수를 기본으로 설정하여 점수를 [0, 1] 범위로 매핑
         self.model = CrossEncoder(model_name, device=self.device, default_activation_function=torch.nn.Sigmoid())
-        print(f"✅ Reranker 모델 로드 완료: {model_name}")
+        print(f"Reranker 모델 로드 완료: {model_name}")
 
     def rerank(self, query: str, documents: List[Document], top_k: int = 10) -> List[Document]:
         """질문과 문서 리스트를 받아 유사도 점수를 기반으로 재정렬합니다."""

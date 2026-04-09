@@ -32,7 +32,7 @@ class TextRetrievalEngine:
 
     def _load_existing_retriever(self, db_dir: str, store_path: str, k: int) -> Tuple[EnsembleRetriever, List]:
         """저장된 하이브리드 인덱스(VectorDB, Docstore)를 불러옵니다."""
-        print("⚡ 하드디스크에 저장된 DB와 문서를 불러옵니다!")
+        print("[DB Load] 하드디스크에 저장된 DB와 문서를 불러옵니다!")
         vectorstore = Chroma(persist_directory=db_dir, embedding_function=self.embedding_model)
         
         with open(store_path, "rb") as f:
