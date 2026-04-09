@@ -6,6 +6,7 @@ from langchain_classic.chains import create_retrieval_chain
 
 from src.models import get_gemini_model
 from src.retrieval.router import extract_target_company, extract_target_table, rerank_by_table, get_company_filtered_retriever
+from src.retrieval.reranker import NeuralReranker
 from src.engines.agent import CorrectiveAgent
 from src.utils.vision import get_page_text_and_image
 from src.utils.common import clean_llm_response
@@ -19,6 +20,7 @@ class RAGEngine:
         self.vision_retriever = vision_retriever
         self.agent = CorrectiveAgent()
         self.llm = get_gemini_model()
+        self.reranker = NeuralReranker() # BGE-Reranker-v2-m3 로컬 로드
 
     def run_method0_baseline(self, query: str) -> str:
         """Method 0: 단순 텍스트 기반 하이브리드 Baseline RAG를 실행합니다."""
@@ -58,10 +60,23 @@ class RAGEngine:
 
         retrieved = active_retriever.invoke(query)
 
-        # 표 이름이 질문에 명시된 경우, 해당 표를 포함한 페이지를 우선 배치
+        # 1. 시맨틱 재순위화 (Neural Reranking)
+        # 검색된 Top-K 후보군을 딥러닝 모델로 재정렬
+        retrieved = self.reranker.rerank(query, retrieved, top_k=len(retrieved))
+
+        # 2. 표 이름 기반 하이브리드 가중치 적용 (Heuristic Reranking)
+        # 질문에 표 이름이 명시된 경우, Neural Score에 가산점을 주어 최우선 그룹으로 배치
         table_name = extract_target_table(query)
         if table_name != "NONE":
-            retrieved = rerank_by_table(retrieved, table_name)
+            for doc in retrieved:
+                #Neural 점수는 0~1 사이이므로, 일치 시 큰 가산점(10)을 주어 상단 고정
+                if table_name in doc.page_content:
+                    doc.metadata["hybrid_score"] = doc.metadata.get("rerank_score", 0) + 10.0
+                else:
+                    doc.metadata["hybrid_score"] = doc.metadata.get("rerank_score", 0)
+            
+            # 하이브리드 점수 기준으로 재정렬
+            retrieved = sorted(retrieved, key=lambda x: x.metadata.get("hybrid_score", 0), reverse=True)
 
         # (source, page) 기준으로 중복된 문서 제거
         seen_keys = set()

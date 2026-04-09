@@ -8,9 +8,10 @@
 ## ✨ 핵심 기술 및 특징 (Core Technologies)
 
 1. **ColPali v1.2 기반 비전 검색**: 텍스트 추출의 한계를 넘어 이미지(표, 차트) 자체를 벡터화하여 검색하는 최신 시각적 리트리벌(Vision Retrieval) 방식 도입.
-2. **자가 교정(Corrective) 에이전트**: Gemini 모델이 검색된 이미지를 직접 읽고 질문과의 정합성을 스스로 검증하며, 오답 시 후보군을 확장하거나 검색 전략을 수정하는 루프 구현.
-3. **하이브리드 앙상블 검색**: 고유명사에 강한 BM25와 맥락에 강한 Vector Semantics를 결합하여 전문 금융 용어 검색의 정확도 극대화.
-4. **수치 정합성 평가**: 단순 텍스트 비교를 넘어 단위(천원, 백만원 등)를 고려한 수치 데이터 검증 로직을 평가 파이프라인에 통합.
+2. **로컬 Neural Reranking (BGE-M3)**: 검색된 후보군에 대해 BGE-Reranker-v2-m3 모델을 활용하여 문맥적 유사도를 재순위화함으로써 검색 정밀도 극대화.
+3. **양방향 자가 교정(Bidirectional Corrective) 에이전트**: Gemini 모델이 검색된 이미지를 직접 읽고 질문과의 정합성을 스스로 검증하며, 표 단절이나 단위(Unit) 누락 감지 시 전후 페이지를 동적으로 탐색하는 **양방향 슬라이딩 윈도우(Bidirectional Sliding Window)** 루프 구현.
+4. **하이브리드 앙상블 검색 & 재순위화**: BM25, Vector Semantics, ColPali 비전 검색을 병행하고, 질문 내 '표 이름' 기반 가중치와 Neural Score를 결합한 **Hybrid Reranking** 전략 사용.
+5. **Context Carry-over 지능**: 여러 페이지에 걸친 분석 중 발견된 핵심 메타데이터(단위, 기업명 등)를 휘발시키지 않고 다음 탐색 단계로 전달하여 일관된 답변 생성 보장.
 
 ---
 
@@ -23,6 +24,7 @@ Financial_RAG_System/
 │   ├── retrieval/                  # 검색 엔진 레이어
 │   │   ├── vision_engine.py        # ColPali 기반 비전 인덱싱 및 검색
 │   │   ├── text_engine.py          # BM25 + Vector 하이브리드 검색
+│   │   ├── reranker.py             # BGE-Reranker-v2-m3 기반 재순위화
 │   │   └── router.py               # 쿼리 기반 대상 기업 자동 라우팅
 │   │
 │   ├── engines/                    # 실행 엔진 레이어
@@ -36,7 +38,8 @@ Financial_RAG_System/
 │   │
 │   ├── utils/                      # 공용 유틸리티
 │   │   ├── vision.py               # 이미지/PDF 처리
-│   │   └── common.py               # 응답 정제 및 공통 유틸
+│   │   ├── common.py               # 응답 정제 및 공통 유틸
+│   │   └── test_reranker.py        # Reranker 로컬 작동 검증 스크립트
 │   │
 │   ├── config.py                   # 중앙 설정 관리
 │   └── models.py                   # LLM 팩토리 (Gemini 최적화)
@@ -68,7 +71,7 @@ Financial_RAG_System/
 - **Method 0 (Baseline)**: 기존의 텍스트 기반 하이브리드(BM25 + Semantic) 검색 및 생성.
 - **Method 1 (Vision-only)**: ColPali를 이용해 PDF 페이지 자체를 검색하여 멀티모달 LLM으로 답변 생성.
 - **Method 2 (Dual-Path)**: 텍스트 검색 결과와 비전 검색 결과를 결합하여 최적의 컨텍스트 제공.
-- **Method 3 (SOTA - Agentic)**: 검색 결과의 정합성을 에이전트가 판단하고, 필요 시 검색 범위를 확장하여 최종 답변 도출.
+- **Method 3 (SOTA - Agentic Multimodal)**: 지능형 라우팅, **Hybrid Reranking(표 매칭 + Neural)**, 그리고 비전 기반 자가 교정 메커니즘을 결합. 에이전트가 시각적 단절을 감지하면 **전후 페이지로 검색 범위를 동적으로 확장(Bidirectional Sliding Window)**하고, 추출된 문맥(Context Carry-over)을 유지하며 최종 답변 도출.
 
 ---
 *(본 프로젝트는 금융 데이터 분석의 정교함을 높이기 위한 멀티모달 기술의 실전 적용 사례를 제시합니다.)*

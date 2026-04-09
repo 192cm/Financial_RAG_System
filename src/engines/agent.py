@@ -14,22 +14,30 @@ class CorrectiveAgent:
 
     def run(self, query: str, pdf_path: str, initial_pages: List[int], all_documents: List, max_expansions: int = 3, table_name: str = "NONE") -> str:
         """초기 검색된 문서 페이지들을 바탕으로 정답을 찾고 필요 시 주변 페이지로 검색 범위를 확장합니다."""
-        # 초기 페이지 그룹으로 시작 → NEXT_PAGE_NEEDED 시 마지막 페이지 기준으로 누적 확장
+        # 초기 페이지 그룹으로 시작 → NEXT/PREV 시 해당 방향으로 누적 확장
         current_pages = list(initial_pages)
         pdf_filename = os.path.basename(pdf_path)
+        
+        # Context Carry-over (루프 중간에 발견된 중요 메타데이터 기억)
+        metadata_context = ""
 
         for step in range(max_expansions + 1):
+            current_pages = sorted(list(set(current_pages))) # 중복 제거 및 정렬
             print(f"🔄 [Agent Loop {step+1}] 분석 중인 페이지: {[p+1 for p in current_pages]}")
             
             text_context, images = self._collect_data(pdf_path, current_pages, all_documents)
             
-            prompt = self._get_prompt(pdf_filename, query, text_context, table_name)
+            prompt = self._get_prompt(pdf_filename, query, text_context, table_name, metadata_context)
             content_list = [{"type": "text", "text": prompt}]
             for b64 in images:
                 content_list.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
             
             response = self.llm.invoke([HumanMessage(content=content_list)])
-            status, answer = self._parse_response(response.content)
+            status, answer, meta = self._parse_response(response.content)
+            
+            # 메타데이터 업데이트 (단위 정보 등 보존)
+            if meta:
+                metadata_context = meta
 
             if status == "WRONG_DOCUMENT":
                 return "WRONG_DOCUMENT"
@@ -38,14 +46,22 @@ class CorrectiveAgent:
                     current_pages.append(current_pages[-1] + 1)
                     continue
                 else:
-                    # 최대 확장 횟수 초과 → 이 후보에서는 찾을 수 없음
+                    return "NOT_FOUND_IN_THIS_CANDIDATE"
+            elif status == "PREV_PAGE_NEEDED":
+                if step < max_expansions:
+                    if current_pages[0] > 0:
+                        current_pages.insert(0, current_pages[0] - 1)
+                        continue
+                    else:
+                        # 더 이상 이전 페이지가 없음 → 현재 컨텍스트에서 최선 다하기
+                        pass
+                else:
                     return "NOT_FOUND_IN_THIS_CANDIDATE"
             elif status == "SUCCESS":
                 return answer
             elif status == "NOT_FOUND_IN_THIS_CANDIDATE":
                 return "NOT_FOUND_IN_THIS_CANDIDATE"
             else:
-                # UNKNOWN(파싱 실패) → 이 후보 포기
                 return "NOT_FOUND_IN_THIS_CANDIDATE"
 
         return "NOT_FOUND_IN_THIS_CANDIDATE"
@@ -59,18 +75,20 @@ class CorrectiveAgent:
             if img: images.append(img)
         return "\n\n".join(texts), images
 
-    def _get_prompt(self, filename: str, query: str, context: str, table_name: str = "NONE") -> str:
+    def _get_prompt(self, filename: str, query: str, context: str, table_name: str = "NONE", metadata_context: str = "") -> str:
         """에이전트 판단을 위해 기업명, 표 제약조건, 정합성을 검증하는 프롬프트를 생성합니다."""
-        # 표 이름이 명시된 경우 프롬프트에 강제 검증 규칙 삽입
         table_rule = (
             f'\n0. [표 검증 - 최우선] 현재 페이지에 "{table_name}" 표(또는 섹션)가 명확히 존재하지 않으면 '
             f'→ "NOT_FOUND_IN_THIS_CANDIDATE" (다른 표의 동일 항목값 사용 절대 금지)'
             if table_name and table_name != "NONE" else ""
         )
+        
+        meta_info = f"\n[이전 루프에서 파악된 정보]: {metadata_context}" if metadata_context else ""
+
         return f"""당신은 금융 문서 전문 분석가입니다. 아래 규칙을 반드시 순서대로 따르세요.
 
 [분석 파일]: {filename}
-[사용자 질문]: {query}
+[사용자 질문]: {query}{meta_info}
 [텍스트 컨텍스트]:
 {context}
 
@@ -78,29 +96,27 @@ class CorrectiveAgent:
 {table_rule}
 1. [기업명 불일치] 컨텍스트의 기업명이 질문의 기업명과 다르면 → "WRONG_DOCUMENT"
 
-2. [표 단절 감지] 아래 중 하나라도 해당하면 → "NEXT_PAGE_NEEDED"
-   - 표의 행이 "(다음 쪽에 계속)", "계속" 등으로 끝남
-   - 표의 마지막 행에 합계(total)나 소계 행이 없이 중간에 끊김
-   - 질문에서 요구하는 특정 항목이 표 헤더에는 있으나 값 행이 페이지 내에 없음
-   - 텍스트가 문장 중간에서 잘림
+2. [표/컨텍스트 단절 감지] 아래 중 하나라도 해당하면 확장을 요청하세요:
+   - "NEXT_PAGE_NEEDED": 표의 행이 아래로 이어지거나, 합계/소계 없이 중간에 끊김, 텍스트가 문장 중간에서 잘림
+   - "PREV_PAGE_NEEDED": 현재 정답 수치는 찾았으나 '단위(예: 백만원)' 정보가 상단에 없고, 표의 헤더가 시작되지 않은 채 중간부터 나타남
 
-3. [표 불일치] 질문이 지목한 특정 표가 아닌 다른 표(요약표, 별도재무제표 등)라면 → "NOT_FOUND_IN_THIS_CANDIDATE"
+3. [표 불일치] 질문이 지목한 특정 표가 아닌 다른 표라면 → "NOT_FOUND_IN_THIS_CANDIDATE"
 
-4. [정답 확정] 질문이 요구하는 수치를 원문에서 직접 찾은 경우 → "SUCCESS"
+4. [정답 확정] 질문이 요구하는 수치를 원문에서 직접 찾고 '단위'까지 확신할 수 있는 경우 → "SUCCESS"
    - 반드시 원문에 명시된 숫자만 사용 (계산·추론 금지)
-   - 연도(예: 2024년)와 기수(예: 제56기)를 원문 그대로 표기
-   - 단위(백만원, 천원, 원 등)를 원문 그대로 표기
-   - 답변은 질문에 대한 완결된 문장으로 작성하고, 반드시 출처(파일명, 페이지 번호)를 명시하세요. (예: "삼성전자의 2024년 당기순이익은 [분석 파일]의 [페이지 n]에 기재된 바와 같이 34,451,351백만원입니다.")
+   - 반드시 단위(백만원, 천원 등)를 원문 그대로 표기 (이전 루프 정보 참고 가능)
+   - 답변은 질문에 대한 완결된 문장으로 작성하고 출처를 명시하세요.
 
-반드시 아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
+반드시 아래 JSON 형식으로만 응답하세요:
 {{
-    "status": "WRONG_DOCUMENT | NEXT_PAGE_NEEDED | NOT_FOUND_IN_THIS_CANDIDATE | SUCCESS",
-    "answer": "SUCCESS일 때만 '파일명과 페이지가 포함된 완결된 문장'으로 답변 작성, 나머지는 빈 문자열"
+    "status": "WRONG_DOCUMENT | NEXT_PAGE_NEEDED | PREV_PAGE_NEEDED | NOT_FOUND_IN_THIS_CANDIDATE | SUCCESS",
+    "answer": "SUCCESS일 때만 작성, 나머지는 빈 문자열",
+    "found_metadata": "현재까지 파악된 단위(Unit) 정보 등 (다음 루프를 위해 기록)"
 }}
 """
 
     def _parse_response(self, response_text: Any):
-        """에이전트의 LLM 응답값에서 검증결과(status)와 답변(answer)을 파싱합니다."""
+        """에이전트의 LLM 응답값에서 검증결과(status), 답변(answer), 메타데이터를 파싱합니다."""
         try:
             res = response_text
             if isinstance(res, list):
@@ -108,7 +124,17 @@ class CorrectiveAgent:
             
             clean_json = str(res).strip("` \n")
             if clean_json.startswith("json\n"): clean_json = clean_json[5:]
+            
+            # JSON만 추출하기 위해 re 사용 (간혹 LLM이 JSON 앞뒤에 텍스트를 붙이는 경우 대비)
+            json_match = re.search(r'\{.*\}', clean_json, re.DOTALL)
+            if json_match:
+                clean_json = json_match.group()
+
             parsed = json.loads(clean_json)
-            return parsed.get("status", "UNKNOWN"), parsed.get("answer", "")
+            return (
+                parsed.get("status", "UNKNOWN"), 
+                parsed.get("answer", ""), 
+                parsed.get("found_metadata", "")
+            )
         except:
-            return "UNKNOWN", ""
+            return "UNKNOWN", "", ""
