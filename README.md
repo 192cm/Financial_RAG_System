@@ -1,34 +1,73 @@
-# 📈 지능형 멀티모달 금융 RAG 시스템 
-### (Intelligent Multi-modal Financial RAG with Vision Self-Correction Agent)
+# 📈 지능형 멀티모달 금융 RAG 시스템
+### Intelligent Multi-modal Financial RAG with Vision Self-Correction Agent
 
-본 프로젝트는 금융감독원 전자공시시스템(DART)의 방대한 비정형/멀티모달 사업보고서(PDF)에서 사용자가 원하는 재무 데이터를 왜곡 없이 정밀하게 추출하기 위해 설계된 **전문가용 하이브리드 RAG 시스템**입니다.
-
----
-
-## ✨ 핵심 기술 (Core Technologies)
-
-1. **ColPali v1.2 기반 비전 검색**: 텍스트 추출의 한계를 넘어 이미지(표, 차트) 자체를 벡터화하여 검색하는 최신 시각적 리트리벌(Vision Retrieval) 방식 도입.
-2. **Dual-Path Hybrid Retrieval**: 텍스트 앙상블(BM25+Semantic)과 비전 리트리벌을 병렬로 수행하여 검색 후보군을 통합함으로써 검색 누락률 최소화.
-3. **상호 검증 가중치 (Consensus Boost)**: 두 검색 경로가 동시에 지목한 페이지에 대해 AI가 높은 신뢰 점수를 부여하여 정답 페이지를 최상단으로 강제 정렬.
-4. **로컬 Neural Reranking (BGE-M3)**: 통합된 모든 후보군에 대해 의미론적 유사도를 재순위화함으로써 검색 정밀도 극대화.
-5. **Bidirectional Corrective 에이전트**: Gemini 모델이 검색된 고화질 이미지를 직접 읽고(2차 비전 검증), 표 단절이나 단위 누락 감지 시 전후 페이지를 동적으로 탐색하는 **Sliding Window** 메커니즘.
-6. **지능형 라우팅 & 캐싱**: 질문에서 기업명과 표 이름을 자동 추출하여 검색 범위를 좁히고, 반복 쿼리 시 검색기 로딩 시간을 단축하는 최적화 적용.
+본 프로젝트는 금융감독원 전자공시시스템(DART)의 방대한 비정형 멀티모달 사업보고서(PDF)에서 데이터를 정밀하게 추출하기 위해 설계된 **전문가용 하이브리드 RAG 시스템**입니다. 텍스트와 시각 정보를 동시에 처리하는 **Dual-Path Retrieval**과 에이전트 기반의 **자가 교정(Corrective Agent)** 아키텍처를 통해 데이터 왜곡 없는 고성능 금융 분석 환경을 제공합니다.
 
 ---
 
-## 📊 벤치마크 결과 (Benchmark Results)
+## 🚀 주요 혁신 기술 (Key Innovations)
 
-금융 질문 10개 세트에 대한 각 방법론별 성능 지표입니다. (상세 결과: [05_evaluation_results.ipynb](notebooks/05_evaluation_results.ipynb))
+### 1. Vision-First Retrieval (ColPali v1.2)
+금융 보고서의 핵심인 표, 차트, 복잡한 레이아웃을 텍스트 추출 없이 이미지 본연의 의미로 검색합니다. 시각적 맥락을 유지하여 텍스트 기반 검색의 한계를 극복했습니다.
 
-| 모델 (Method) | Exact Match | ROUGE-L | BLEU | Latency (sec) | 특징 |
+### 2. Dual-Path Hybrid Architecture
+- **Text Path**: BM25 + Semantic Search (Ensemble)
+- **Vision Path**: ColPali-based Vision Indexing
+- **Consensus Boost**: 두 경로가 공통으로 지목한 페이지에 가중치를 부여하여 검색 신뢰도를 비약적으로 향상시켰습니다.
+
+### 3. Neural Reranking (BGE-M3)
+통합된 모든 검색 후보군에 대해 로컬 GPU를 활용한 **BAAI/bge-reranker-v2-m3** 기반 재순위화를 수행하여 검색 정밀도(Precision)를 극대화합니다.
+
+### 4. Agentic Self-Correction (Corrective Agent)
+Gemini 모델이 검색된 고화질 이미지를 직접 비전 분석하며 다음과 같은 지능형 작업을 수행합니다.
+- **표 단절 감지**: 페이지 경계에서 표가 끊긴 경우 전후 페이지를 동적으로 탐색하는 **Sliding Window** 작동.
+- **수치 검증**: 질문과 상관없는 데이터를 걸러내고 단위 누락을 자가 교정.
+- **무한 루프 방지**: 에이전트의 최대 탐색 횟수를 제어하여 시스템 안정성을 확보했습니다.
+
+---
+
+## 📊 벤치마크 결과 (Comprehensive Benchmark)
+
+10개의 고난도 금융 도메인 질문 세트(수치 계산, 표 분석 포함)에 대한 방법론별 성능 비교입니다.
+
+| 모델 (Methodology) | Exact Match | ROUGE-L | BLEU | Latency (sec) | 특징 |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **Method 0 (Baseline)** | 0.6 | 0.288 | 0.054 | 10.04 | 텍스트 하이브리드 베이스라인 |
-| **Method 1 (Vision Only)** | 0.4 | 0.214 | 0.038 | 12.49 | ColPali 단독 검색 |
-| **Method 2 (Dual Basic)** | 0.7 | 0.391 | 0.069 | 9.97 | 검색 결과 단순 결합 |
-| **SOTA (Full)** | **0.8** | **0.438** | **0.077** | **133.76** | **전체 아키텍처 및 에이전트 적용** |
+| **Method 0 (Baseline)** | 0.6 | 0.380 | 0.022 | 10.04 | 텍스트 하이브리드 베이스라인 |
+| **Method 1 (Vision Only)** | 0.0 | 0.249 | 0.006 | 12.49 | ColPali 단독 검색 |
+| **Method 2 (Dual Basic)** | 0.3 | 0.289 | 0.026 | 9.97 | 단순 시각 정보 결합 |
+| **w/o Reranker** | 0.7 | 0.389 | 0.070 | 41.20 | Reranking 제외 버전 |
+| **SOTA (Full)** | **0.8** | **0.438** | **0.077** | **133.75** | **전체 아키텍처 및 에이전트 적용** |
 
-> [!TIP]
-> **SOTA 모델**은 에이전트의 자가 교정 루프가 포함되어 Latency는 증가하지만, 복잡한 표 데이터에 대해 **Exact Match 80%**라는 압도적인 정밀도를 보여줍니다.
+> [!IMPORTANT]
+> **SOTA 모델**은 에이전트의 자가 교정 및 다단계 재순위화 프로세스로 인해 Latency가 높으나, **Exact Match 80%** 및 **LLM Judge Score 4.2/5.0**으로 가장 높은 정답률과 답변 퀄리티를 보장합니다.
+
+---
+
+## 🛠️ 시작하기 (Getting Started)
+
+### 1. 환경 준비 (Prerequisites)
+- **OS**: Windows (tested) / Linux (Cuda support recommended)
+- **Python**: 3.10+
+- **Hardware**: GPU (8GB+ VRAM recommended for ColPali & Reranker)
+
+### 2. 설치
+```bash
+git clone https://github.com/your-repo/Financial_RAG_System.git
+cd Financial_RAG_System
+pip install -r requirements.txt
+```
+
+### 3. 환경 설정
+`.env` 파일을 루트 디렉토리에 생성하고 Google API 키를 입력합니다.
+```env
+GOOGLE_API_KEY=your_gemini_api_key_here
+```
+
+### 4. 하드웨어 체크 및 실행
+```bash
+# 하드웨어 사양 및 CUDA 가속 확인
+jupyter notebook notebooks/00_environment_check.ipynb
+```
 
 ---
 
@@ -36,33 +75,39 @@
 
 ```text
 Financial_RAG_System/
-│
-├── src/                            # 🛠️ 핵심 엔진 모듈
-│   ├── retrieval/                  # 검색 엔진 레이어 (Vision, Text, Reranker, Router)
-│   ├── engines/                    # 실행 엔진 레이어 (RAG Workflow, Corrective Agent)
-│   ├── evaluation/                 # 평가 자동화 (Runner, Judge, Metrics)
-│   ├── utils/                      # 유틸리티 (Vision, Common Helper)
-│   ├── config.py                   # 중앙 설정 관리
-│   └── models.py                   # LLM 팩토리 (Gemini 최적화)
-│
-├── notebooks/                      # 📓 분석 및 실험
-│   ├── 01_baseline_rag.ipynb       # [Method 0] 테스트
-│   ├── 02_method1_vision_rag.ipynb  # [Method 1] 테스트
-│   ├── 03_method2_dual_path.ipynb   # [Method 2] 테스트
-│   ├── 04_method3_sota_rag.ipynb   # [Method 3] SOTA 아키텍처 데모
-│   └── 05_evaluation_results.ipynb # [Main] 최종 벤치마크 결과 분석
-│
-├── data/                           # 🗂️ 데이터 저장소 (PDF, DB, Dataset)
-├── config/                         # ⚙️ YAML 설정 파일
-└── README.md                       # 통합 가이드
+├── src/                        # 🛠️ 핵심 엔진 모듈
+│   ├── retrieval/              # 검색 레이어 (Vision, Text, Reranker, Router)
+│   ├── engines/                # 실행 엔진 (RAG Workflow, Corrective Agent)
+│   ├── evaluation/             # 평가 라이브러리 (Judge, Metrics, Runner)
+│   └── utils/                  # 멀티모달 전처리 및 공통 유틸리티
+├── notebooks/                  # 📓 방법론별 실험 및 결과 분석
+│   ├── 00_environment_check.ipynb
+│   ├── 01_baseline_rag.ipynb   # Method 0
+│   ├── 02_method1_vision_rag.ipynb # Method 1
+│   ├── 03_method2_dual_path.ipynb  # Method 2
+│   ├── 04_method3_sota_rag.ipynb   # SOTA (Method 3)
+│   └── 05_evaluation_results.ipynb # 최종 벤치마크 분석
+├── data/                       # 🗂️ 원본 PDF 및 Vector DB / Index
+└── config/                     # ⚙️ 시스템 설정 관리
 ```
 
 ---
 
-## 🚀 주요 워크플로우
+## 🏗️ 시스템 아키텍처
 
-- **Method 2 (Dual-Path Basic)**: 텍스트 검색 결과와 시각 정보를 단순 결합하여 제공하는 하이브리드 RAG. ([03_method2_dual_path.ipynb](notebooks/03_method2_dual_path.ipynb))
-- **Method 3 (SOTA - Agentic Multimodal)**: 지능형 라우팅과 **Dual-Path 검색**, **Consensus Boost**, **Neural Reranking**, **Corrective Agent**가 결합된 최신 아키텍처. 에이전트가 단절 감지 시 전후 페이지를 동적으로 탐색하며 최종 답변을 도출합니다. ([04_method3_sota_rag.ipynb](notebooks/04_method3_sota_rag.ipynb))
+```mermaid
+graph TD
+    A[사용자 질문] --> B{쿼리 라우터}
+    B -->|기업/문서 특정| C1[Hybrid Text Path]
+    B -->|이미지/표 검색| C2[Vision Path - ColPali]
+    C1 & C2 --> D[Consensus Boost & 후보군 통합]
+    D --> E[Neural Reranking - BGE-M3]
+    E --> F[Corrective Agent - Gemini 1.5 Pro/Flash]
+    F --> G{검증 루프}
+    G -->|표 단절/누락 감지| H[Sliding Window 탐색]
+    H --> F
+    G -->|검증 완료| I[최종 답변 생성]
+```
 
 ---
-*(본 프로젝트는 금융 데이터 분석의 정교함을 높이기 위한 멀티모달 기술의 실전 적용 사례를 제시합니다.)*
+*(본 프로젝트는 금융 데이터 분석의 정교함을 높이기 위한 최신 멀티모달 기술의 실전 적용 사례를 제시합니다.)*
